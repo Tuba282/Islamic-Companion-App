@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/"
+title = "Islamic Companion"
+description = "A premium Islamic companion mobile app for prayer times, Qibla direction, alarms, Salah tracking, Tasbeeh, Azkar, Ramadan, and daily spiritual routines."
+version = "1.0.0"
+id = "artifacts/islamic-companion"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/" ]
+localPort = 23885
+
+[services.development]
+run = "pnpm --filter @workspace/islamic-companion run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/islamic-companion", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/islamic-companion", "run", "serve" ]
+
+[services.env]
+PORT = "23885"
+BASE_PATH = "/"

@@ -1,0 +1,230 @@
+Create a complete, production-ready Islamic Companion / Namaz mobile app based on the provided UI reference image.
+
+Build the app with a premium, elegant Islamic aesthetic using a dark emerald green + gold theme, smooth rounded cards, subtle gradients, Islamic geometric details, elegant typography, clean icons, soft shadows, and fully responsive mobile-first layouts.
+
+App Name: “Islamic Companion”
+
+CORE SCREENS & FUNCTIONALITIES:
+
+1. SPLASH / ONBOARDING
+- Islamic-themed splash screen
+- App logo and branding
+- Short welcome message
+- Multi-screen onboarding
+- Get Started button
+- Request location/notification permissions when required
+- Persist onboarding completion
+
+2. HOME / DASHBOARD
+- Greeting with user name
+- Current location
+- Live current time
+- Gregorian date
+- Hijri date
+- Next prayer card
+- Countdown to next prayer
+- Complete daily prayer schedule
+- Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha
+- Highlight current/next prayer
+- Location-based prayer times
+- Bottom navigation
+- Quick access to Qibla, Alarm, Tracker, and More
+
+3. QIBLA DIRECTION
+- Interactive Qibla compass
+- Device orientation/sensor support
+- Show Qibla angle
+- Show current direction
+- Detect current location
+- Display latitude and longitude
+- Calibration guidance
+- Smooth compass animation
+- Accurate Qibla direction toward Kaaba
+
+4. PRAYER ALARM
+- Display all five prayer alarms
+- Individual enable/disable switches
+- Prayer-specific notification scheduling
+- Adhan notification
+- Vibration toggle
+- Snooze duration
+- Test Alarm button
+- Navigate to Alarm Tone selection
+- Persist alarm preferences
+
+5. ALARM TONE
+- List available Adhan/alarm tones
+- Adhan 1
+- Adhan 2
+- Adhan 3
+- Makkah Alarm
+- Madinah Alarm
+- Gentle Bell
+- Soft Reminder
+- Beep
+- Nature Sound
+- Radio/selectable tone buttons
+- Preview selected tone
+- Save selected tone
+
+6. ISLAMIC CALENDAR
+- Full Hijri calendar
+- Gregorian date mapping
+- Month navigation
+- Current day highlight
+- Hijri month/year display
+- Islamic events
+- Important Islamic dates
+- Events such as 1 Dhul-Qadah, Day of Arafah, Eid al-Adha, Islamic New Year
+- Clean monthly calendar UI
+
+7. AZKAR & DUAS
+- Morning Azkar
+- Evening Azkar
+- After Salah
+- Before Sleep
+- Travel Duas
+- Protection Duas
+- Daily Duas
+- Quranic Duas
+- Daily Quran verse
+- Arabic text
+- Translation
+- Transliteration where appropriate
+- Categorized cards
+- Search functionality
+- Bookmark/favorite functionality
+- Reading progress
+
+8. TASBEEH COUNTER
+- Large digital counter
+- Tap anywhere on counter to increment
+- Circular/dhikr progress visualization
+- SubhanAllah preset
+- Alhamdulillah preset
+- Allahu Akbar preset
+- Custom counter
+- Increment/decrement controls
+- Reset button
+- Preset selection
+- Persist current count
+- Haptic feedback option
+
+9. SALAH TRACKER
+- Daily prayer checklist
+- Fajr
+- Dhuhr
+- Asr
+- Maghrib
+- Isha
+- Completed prayer indicator
+- Missed/incomplete prayer indicator
+- Daily status
+- Weekly progress chart
+- Prayer history
+- Automatically reset daily
+- Store historical records
+
+10. RAMADAN
+- Ramadan Hijri date
+- Ramadan day counter
+- Fasting status
+- Sehri time
+- Iftar time
+- Iftar countdown
+- Quran progress
+- Daily Ramadan goals
+- Fasting tracker
+- Ramadan duas
+- Prayer shortcuts
+- Progress indicators
+- Ramadan-specific Islamic UI
+
+11. SETTINGS
+- Location
+- Prayer calculation method
+- Asr calculation method
+- Notification settings
+- Prayer alarm settings
+- Hijri date adjustment
+- Theme
+- Language
+- About App
+- App version
+- Save all preferences persistently
+
+12. THEME PREVIEW
+- Dark Green theme
+- Light theme
+- Navy Blue theme
+- Accent color selection
+- Gold
+- Green
+- Blue
+- Purple
+- Red
+- Live theme preview
+- Persist selected theme
+- Apply theme globally across the app
+
+NAVIGATION:
+- Bottom navigation with Home, Qibla, Alarm, Tracker, More
+- More section should provide access to Calendar, Azkar & Duas, Tasbeeh, Ramadan, Settings, and Theme
+- Smooth page transitions
+- Back navigation
+- Consistent navigation state
+
+DESIGN SYSTEM:
+- Premium Islamic mobile UI
+- Dark emerald green primary background
+- Gold accent color
+- Optional Light and Navy themes
+- Rounded cards
+- Subtle Islamic geometric patterns
+- Crescent/moon/star visual elements
+- Elegant Islamic-inspired typography
+- High contrast and readable text
+- Consistent spacing and padding
+- Modern minimalist interface
+- Smooth animations
+- Micro-interactions
+- Loading states
+- Empty states
+- Error states
+- Toast/snackbar feedback
+- Accessible touch targets
+- Fully responsive layouts
+
+FUNCTIONAL REQUIREMENTS:
+- Real-time prayer calculations
+- Location-based prayer times
+- Qibla calculation from device location
+- Local notifications for prayer alarms
+- Persistent user preferences
+- Persistent Salah history
+- Persistent Tasbeeh count
+- Persistent theme selection
+- Persistent onboarding state
+- Offline-friendly access to saved Islamic content
+- Handle permission denial gracefully
+- Handle unavailable GPS/location gracefully
+- Handle device sensor limitations gracefully
+- Validate all user inputs
+- Use reusable components
+- Use clean architecture
+- Separate UI, business logic, services, and data layers
+- Avoid duplicated code
+- Use proper state management
+- Include loading and error handling
+- Optimize performance
+
+DATA / BACKEND:
+- Design a scalable data model for users, prayer settings, alarms, Salah history, Tasbeeh progress, bookmarks, themes, and preferences.
+- If authentication is included, support email/password and Google Sign-In.
+- Secure user-specific data.
+- Keep sensitive configuration in environment variables.
+- Never hardcode API keys or secrets.
+
+Create all required screens, reusable components, navigation, state management, data models, services, notification logic, location logic, Qibla calculation, prayer calculation integration, theme system, and persistent storage.
+
+Make the final application feel like a polished real-world Islamic companion app rather than a basic demo.
