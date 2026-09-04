@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -8,7 +8,7 @@ export function Screen({ children, scroll = true, style }: { children: React.Rea
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const content = <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top + 10, paddingBottom: insets.bottom + 88 }, style]}>{children}</View>;
-  return scroll ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView> : content;
+  return scroll ? <ScrollView style={{ flex: 1, backgroundColor: colors.background }} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>{content}</ScrollView> : <View style={{ flex: 1, backgroundColor: colors.background }}>{content}</View>;
 }
 
 export function Header({ title, subtitle, onBack }: { title: string; subtitle?: string; onBack?: () => void }) {
@@ -46,7 +46,9 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
 
 export function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
   const colors = useColors();
-  return <Pressable onPress={onChange} style={[styles.toggle, { backgroundColor: value ? colors.gold : colors.muted }]}><View style={[styles.toggleKnob, { backgroundColor: value ? colors.primaryForeground : colors.mutedForeground, transform: [{ translateX: value ? 17 : 2 }] }]} /></Pressable>;
+  const offset = React.useRef(new Animated.Value(value ? 17 : 2)).current;
+  React.useEffect(() => { Animated.spring(offset, { toValue: value ? 17 : 2, useNativeDriver: true, speed: 22, bounciness: 5 }).start(); }, [offset, value]);
+  return <Pressable onPress={onChange} style={({ pressed }) => [styles.toggle, { backgroundColor: value ? colors.gold : colors.muted }, pressed && { opacity: 0.75 }]}><Animated.View style={[styles.toggleKnob, { backgroundColor: value ? colors.primaryForeground : colors.mutedForeground, transform: [{ translateX: offset }] }]} /></Pressable>;
 }
 
 export function Row({ icon, title, detail, onPress, right }: { icon: keyof typeof Feather.glyphMap; title: string; detail?: string; onPress?: () => void; right?: React.ReactNode }) {

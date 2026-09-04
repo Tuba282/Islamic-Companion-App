@@ -3,36 +3,76 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import { formatPrayerTime, nextPrayer } from '@/lib/prayer';
+import { useAppState } from '@/context/AppState';
 import { Screen, GlassCard, SectionTitle, IconButton } from '@/components/Primitives';
 import { useColors } from '@/hooks/useColors';
 
-const prayers = [
-  ['Fajr', '04:58 AM', '04:58'],
-  ['Sunrise', '06:15 AM', '06:15'],
-  ['Dhuhr', '01:30 PM', '13:30'],
-  ['Asr', '03:55 PM', '15:55'],
-  ['Maghrib', '06:47 PM', '18:47'],
-  ['Isha', '08:15 PM', '20:15'],
-];
+const prayerKeys = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'] as const;
+
+function countdown(target: Date | undefined, now: Date) {
+  if (!target) return '--:--:--';
+  let difference = target.getTime() - now.getTime();
+  if (difference < 0) difference += 86400000;
+  const hours = Math.floor(difference / 3600000).toString().padStart(2, '0');
+  const minutes = Math.floor((difference % 3600000) / 60000).toString().padStart(2, '0');
+  const seconds = Math.floor((difference % 60000) / 1000).toString().padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
 
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
+  const { locationStatus, locationLabel, prayerTimes, refreshLocation } = useAppState();
   const [now, setNow] = useState(new Date());
-  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(timer); }, []);
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  useEffect(() => {
+    if (locationStatus === 'idle') void refreshLocation();
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [locationStatus, refreshLocation]);
+
+  const upcoming = prayerTimes ? nextPrayer(prayerTimes, now) : null;
+  const currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const date = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const locationMessage = locationStatus === 'loading' ? 'Detecting your current location…' : locationStatus === 'denied' ? 'Location permission needed' : locationLabel;
+
   return (
     <Screen>
-      <View style={styles.top}><View><Text style={[styles.eyebrow, { color: colors.gold }]}>ASSALAMU ALAIKUM</Text><Text style={[styles.greeting, { color: colors.foreground }]}>Good morning, <Text style={{ color: colors.gold }}>Tuba</Text></Text><View style={styles.location}><Feather name="map-pin" size={12} color={colors.mutedForeground} /><Text style={[styles.locationText, { color: colors.mutedForeground }]}>Karachi, Pakistan</Text></View></View><IconButton icon="bell" /></View>
-      <View style={styles.clockRow}><Text style={[styles.clock, { color: colors.foreground }]}>{time}</Text><View style={styles.dateWrap}><Text style={[styles.date, { color: colors.mutedForeground }]}>{date}</Text><Text style={[styles.hijri, { color: colors.gold }]}>11 Dhul-Qadah 1445 AH</Text></View></View>
+      <View style={styles.top}>
+        <View>
+          <Text style={[styles.eyebrow, { color: colors.gold }]}>ASSALAMU ALAIKUM</Text>
+          <Text style={[styles.greeting, { color: colors.foreground }]}>Good morning, <Text style={{ color: colors.gold }}>Tuba</Text></Text>
+          <Pressable onPress={() => refreshLocation()} style={styles.location}>
+            <Feather name="map-pin" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.locationText, { color: colors.mutedForeground }]}>{locationMessage}</Text>
+            {locationStatus === 'loading' ? <Feather name="loader" size={11} color={colors.gold} /> : null}
+          </Pressable>
+        </View>
+        <IconButton icon="bell" />
+      </View>
+      <View style={styles.clockRow}>
+        <Text style={[styles.clock, { color: colors.foreground }]}>{currentTime}</Text>
+        <Text style={[styles.date, { color: colors.mutedForeground }]}>{date}</Text>
+        <Text style={[styles.hijri, { color: colors.gold }]}>Local prayer times · Device timezone</Text>
+      </View>
       <LinearGradient colors={[colors.gold, '#B8914B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.nextCard}>
         <View style={styles.nextTop}><Text style={styles.nextLabel}>NEXT PRAYER</Text><View style={styles.sun}><Feather name="sun" size={16} color={colors.primaryForeground} /></View></View>
-        <Text style={[styles.nextName, { color: colors.primaryForeground }]}>Asr</Text><View style={styles.nextTimeRow}><Text style={[styles.nextTime, { color: colors.primaryForeground }]}>3:55 PM</Text><Text style={[styles.until, { color: colors.primaryForeground }]}>in 01:22:30</Text></View>
+        <Text style={[styles.nextName, { color: colors.primaryForeground }]}>{upcoming?.[0] ?? (locationStatus === 'loading' ? 'Locating…' : 'Unavailable')}</Text>
+        <View style={styles.nextTimeRow}><Text style={[styles.nextTime, { color: colors.primaryForeground }]}>{upcoming ? formatPrayerTime(upcoming[1]) : '--:--'}</Text><Text style={[styles.until, { color: colors.primaryForeground }]}>{upcoming ? `in ${countdown(upcoming[1], now)}` : 'Allow location to calculate'}</Text></View>
       </LinearGradient>
-      <SectionTitle title="Today's prayers" action="View all" />
+      <SectionTitle title="Today's prayers" action="Refresh" onAction={() => refreshLocation()} />
       <GlassCard style={styles.schedule}>
-        {prayers.map(([name, label], index) => <View key={name} style={[styles.prayerRow, index === 3 && { backgroundColor: colors.goldSoft, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 12 }]}><View style={[styles.prayerIcon, { backgroundColor: index === 3 ? colors.gold : colors.muted }]}><Feather name={index === 0 ? 'sunrise' : index === 5 ? 'moon' : 'sun'} size={14} color={index === 3 ? colors.primaryForeground : colors.gold} /></View><Text style={[styles.prayerName, { color: colors.foreground }]}>{name}</Text><Text style={[styles.prayerTime, { color: index === 3 ? colors.gold : colors.mutedForeground }]}>{label}</Text>{index === 3 ? <View style={[styles.nowDot, { backgroundColor: colors.gold }]} /> : null}</View>)}
+        {prayerKeys.map((name, index) => {
+          const value = prayerTimes?.[name];
+          const isNext = upcoming?.[0] === name;
+          return <View key={name} style={[styles.prayerRow, isNext && { backgroundColor: colors.goldSoft, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 12 }]}>
+            <View style={[styles.prayerIcon, { backgroundColor: isNext ? colors.gold : colors.muted }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : name === 'Sunrise' ? 'sunrise' : 'sun'} size={14} color={isNext ? colors.primaryForeground : colors.gold} /></View>
+            <Text style={[styles.prayerName, { color: colors.foreground }]}>{name}</Text>
+            <Text style={[styles.prayerTime, { color: isNext ? colors.gold : colors.mutedForeground }]}>{formatPrayerTime(value)}</Text>
+            {isNext ? <View style={[styles.nowDot, { backgroundColor: colors.gold }]} /> : null}
+          </View>;
+        })}
       </GlassCard>
       <SectionTitle title="Quick access" />
       <View style={styles.quickGrid}>
@@ -47,12 +87,11 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 1.4 },
   greeting: { fontSize: 20, fontFamily: 'Inter_700Bold', marginTop: 7 },
   location: { flexDirection: 'row', gap: 5, alignItems: 'center', marginTop: 7 },
-  locationText: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  locationText: { fontSize: 11, fontFamily: 'Inter_400Regular', maxWidth: 250 },
   clockRow: { alignItems: 'center', marginTop: 24, gap: 7 },
   clock: { fontSize: 45, fontFamily: 'Inter_700Bold', letterSpacing: -1 },
-  dateWrap: { alignItems: 'center', gap: 4 },
   date: { fontSize: 11, fontFamily: 'Inter_400Regular' },
-  hijri: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  hijri: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
   nextCard: { borderRadius: 22, padding: 18, marginTop: 24, minHeight: 150 },
   nextTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   nextLabel: { color: '#17352E', fontSize: 10, letterSpacing: 1.3, fontFamily: 'Inter_700Bold' },

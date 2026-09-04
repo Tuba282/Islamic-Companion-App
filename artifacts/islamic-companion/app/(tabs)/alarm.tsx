@@ -1,18 +1,41 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { formatPrayerTime } from '@/lib/prayer';
 import { useAppState, PrayerKey } from '@/context/AppState';
 import { Screen, Header, GlassCard, Row, SectionTitle, Toggle, PrimaryButton } from '@/components/Primitives';
 import { useColors } from '@/hooks/useColors';
 
-const prayerTimes: Array<[PrayerKey, string]> = [['Fajr', '04:58 AM'], ['Dhuhr', '01:30 PM'], ['Asr', '03:55 PM'], ['Maghrib', '06:47 PM'], ['Isha', '08:15 PM']];
+const prayerKeys: PrayerKey[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
 export default function AlarmScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { alarms, toggleAlarm, alarmTone } = useAppState();
-  return <Screen><Header title="Prayer Alarm" subtitle="Never miss a moment of Salah" /><GlassCard style={styles.card}>{prayerTimes.map(([name, time]) => <View key={name} style={styles.alarmRow}><View style={[styles.miniIcon, { backgroundColor: colors.goldSoft }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : 'sun'} size={15} color={colors.gold} /></View><View style={{ flex: 1 }}><Text style={[styles.name, { color: colors.foreground }]}>{name}</Text><Text style={[styles.time, { color: colors.mutedForeground }]}>{time}</Text></View><Toggle value={alarms[name]} onChange={() => toggleAlarm(name)} /></View>)}</GlassCard><SectionTitle title="Alarm preferences" /><GlassCard><Row icon="volume-2" title="Alarm tone" detail={alarmTone} onPress={() => router.push('/tone' as never)} /><Row icon="smartphone" title="Vibration" detail="On" right={<Toggle value onChange={() => undefined} />} /><Row icon="clock" title="Snooze duration" detail="5 minutes" /></GlassCard><View style={{ marginTop: 22 }}><PrimaryButton label="Test alarm" onPress={() => undefined} icon="play" /></View></Screen>;
+  const { alarms, toggleAlarm, alarmTone, vibrationEnabled, setVibrationEnabled, snoozeMinutes, setSnoozeMinutes, scheduleTestAlarm, prayerTimes, locationStatus } = useAppState();
+  const [notice, setNotice] = useState('');
+  const cycleSnooze = () => setSnoozeMinutes(snoozeMinutes === 5 ? 10 : snoozeMinutes === 10 ? 15 : 5);
+  const testAlarm = async () => {
+    const scheduled = await scheduleTestAlarm();
+    if (scheduled) setNotice('Test alarm scheduled. It will ring in about 5 seconds.');
+    else if (locationStatus === 'ready') setNotice('Allow notifications when prompted to schedule the test alarm.');
+    else Alert.alert('Notifications unavailable', 'Open this app on a phone to test a real notification alarm.');
+  };
+  return <Screen>
+    <Header title="Prayer Alarm" subtitle="Your phone will remind you at each prayer" />
+    <GlassCard style={styles.card}>
+      {prayerKeys.map((name) => <View key={name} style={styles.alarmRow}><View style={[styles.miniIcon, { backgroundColor: colors.goldSoft }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : 'sun'} size={15} color={colors.gold} /></View><View style={{ flex: 1 }}><Text style={[styles.name, { color: colors.foreground }]}>{name}</Text><Text style={[styles.time, { color: colors.mutedForeground }]}>{prayerTimes ? formatPrayerTime(prayerTimes[name]) : 'Waiting for location…'}</Text></View><Toggle value={alarms[name]} onChange={() => toggleAlarm(name)} /></View>)}
+    </GlassCard>
+    <SectionTitle title="Alarm preferences" />
+    <GlassCard>
+      <Row icon="volume-2" title="Alarm tone" detail={alarmTone} onPress={() => router.push('/tone' as never)} />
+      <Row icon="smartphone" title="Vibration" detail={vibrationEnabled ? 'On' : 'Off'} right={<Toggle value={vibrationEnabled} onChange={() => setVibrationEnabled(!vibrationEnabled)} />} />
+      <Pressable onPress={cycleSnooze} style={({ pressed }) => [styles.snoozeRow, pressed && { opacity: 0.65 }]}><View style={[styles.prefIcon, { backgroundColor: colors.goldSoft }]}><Feather name="clock" size={16} color={colors.gold} /></View><View style={{ flex: 1 }}><Text style={[styles.prefTitle, { color: colors.foreground }]}>Snooze duration</Text><Text style={[styles.prefDetail, { color: colors.mutedForeground }]}>Tap to change</Text></View><Text style={[styles.snoozeValue, { color: colors.gold }]}>{snoozeMinutes} min</Text></Pressable>
+    </GlassCard>
+    <View style={{ marginTop: 22 }}><PrimaryButton label="Test selected alarm" onPress={testAlarm} icon="play" /></View>
+    {notice ? <Text style={[styles.notice, { color: colors.success }]}>{notice}</Text> : null}
+    <Text style={[styles.helper, { color: colors.mutedForeground }]}>Alarms are scheduled as local phone notifications using your current location's prayer times.</Text>
+  </Screen>;
 }
 
 const styles = StyleSheet.create({
@@ -21,4 +44,11 @@ const styles = StyleSheet.create({
   miniIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   time: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  snoozeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, gap: 12 },
+  prefIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  prefTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
+  prefDetail: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  snoozeValue: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  notice: { fontSize: 11, textAlign: 'center', lineHeight: 17, fontFamily: 'Inter_600SemiBold', marginTop: 12 },
+  helper: { fontSize: 10, lineHeight: 16, textAlign: 'center', fontFamily: 'Inter_400Regular', marginTop: 12 },
 });

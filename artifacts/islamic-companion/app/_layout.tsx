@@ -14,9 +14,18 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppStateProvider } from '@/context/AppState';
+import * as Notifications from 'expo-notifications';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const queryClient = new QueryClient();
 
@@ -31,6 +40,7 @@ function RootLayoutNav() {
       <Stack.Screen name="ramadan" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="theme" />
+      <Stack.Screen name="tone" />
     </Stack>
   );
 }
