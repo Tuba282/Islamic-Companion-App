@@ -44,6 +44,7 @@ const defaultPrayers: DailyPrayerRecord = { Fajr: false, Dhuhr: false, Asr: fals
 const defaultAlarms: Record<PrayerKey, boolean> = { Fajr: true, Dhuhr: false, Asr: true, Maghrib: true, Isha: false };
 const STORAGE_KEY = '@islamic-companion-state';
 const todayKey = () => new Date().toISOString().slice(0, 10);
+const NOTIFICATION_CHANNEL_ID = 'prayer-alarms';
 
 const AppStateContext = createContext<AppStateValue | null>(null);
 
@@ -53,6 +54,21 @@ async function ensureNotificationPermission() {
   if (current.granted) return true;
   const next = await Notifications.requestPermissionsAsync();
   return next.granted;
+}
+
+async function configureNotificationChannel(vibrate: boolean) {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
+      name: 'Prayer alarms',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: vibrate ? [0, 250, 150, 250] : [0],
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+  } catch {
+    // Expo Go can lack the Android channel provider; the production build still configures it.
+  }
 }
 
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
@@ -126,6 +142,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     if (Platform.OS === 'web' || !times) return;
     const allowed = await ensureNotificationPermission();
     if (!allowed) return;
+    await configureNotificationChannel(vibrationEnabled);
     await Notifications.cancelScheduledNotificationAsync(`prayer-${key}`).catch(() => undefined);
     if (!enabled) return;
     const time = times[key];
@@ -137,7 +154,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         sound: 'default',
         vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined,
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, ...prayerTimeForNotification(time) },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, channelId: NOTIFICATION_CHANNEL_ID, ...prayerTimeForNotification(time) },
     });
   };
 
@@ -190,9 +207,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       if (Platform.OS === 'web') return false;
       const allowed = await ensureNotificationPermission();
       if (!allowed) return false;
+      await configureNotificationChannel(vibrationEnabled);
       await Notifications.scheduleNotificationAsync({
         content: { title: 'Islamic Companion test alarm', body: `Your ${alarmTone} reminder is working.`, sound: 'default', vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 5, repeats: false },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, channelId: NOTIFICATION_CHANNEL_ID, seconds: 5, repeats: false },
       });
       return true;
     },

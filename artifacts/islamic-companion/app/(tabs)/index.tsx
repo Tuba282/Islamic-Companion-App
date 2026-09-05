@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { formatPrayerTime, nextPrayer } from '@/lib/prayer';
+import { formatClockTime, formatPrayerTime, nextPrayer } from '@/lib/prayer';
 import { useAppState } from '@/context/AppState';
 import { Screen, GlassCard, SectionTitle, IconButton } from '@/components/Primitives';
 import { useColors } from '@/hooks/useColors';
@@ -33,7 +33,7 @@ export default function HomeScreen() {
   }, [locationStatus, refreshLocation]);
 
   const upcoming = prayerTimes ? nextPrayer(prayerTimes, now) : null;
-  const currentTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const currentTime = formatClockTime(now);
   const date = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const locationMessage = locationStatus === 'loading' ? 'Detecting your current location…' : locationStatus === 'denied' ? 'Location permission needed' : locationLabel;
 

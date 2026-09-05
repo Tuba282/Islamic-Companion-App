@@ -108,7 +108,19 @@ export function qiblaBearing(latitude: number, longitude: number) {
 
 export function formatPrayerTime(value: Date | undefined) {
   if (!value) return '--:--';
-  return value.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return formatClockTime(value);
+}
+
+export function formatClockTime(value: Date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(value);
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '';
+  const period = parts.find((part) => part.type === 'dayPeriod')?.value ?? '';
+  return `${hour}:${minute} ${period}`;
 }
 
 export function prayerTimeForNotification(value: Date) {

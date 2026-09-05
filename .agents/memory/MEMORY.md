@@ -1,0 +1,1 @@
+- [Expo notification channels](expo-notifications.md) — Expo Go may lack Android channel support; guard channel setup while keeping native-build notification configuration.
