@@ -219,6 +219,9 @@ importers:
 
   artifacts/islamic-companion:
     dependencies:
+      expo-audio:
+        specifier: ~1.1.1
+        version: 1.1.1(expo-asset@57.0.16(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3))(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
       expo-notifications:
         specifier: ~0.31.5
         version: 0.31.5(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)
@@ -3077,6 +3080,14 @@ packages:
     resolution: {integrity: sha512-IBRfQdW3iFT+GOBERMZLZM1MUNyrjMgMskuD0elVZ1ae44858UFlTJkHO3f8vi+u5zuv7O7KofsiN8NMG/uWzw==}
     peerDependencies:
       expo: '*'
+      react: '*'
+      react-native: '*'
+
+  expo-audio@1.1.1:
+    resolution: {integrity: sha512-CPCpJ+0AEHdzWROc0f00Zh6e+irLSl2ALos/LPvxEeIcJw1APfBa4DuHPkL4CQCWsVe7EnUjFpdwpqsEUWcP0g==}
+    peerDependencies:
+      expo: '*'
+      expo-asset: '*'
       react: '*'
       react-native: '*'
 
@@ -8417,6 +8428,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-audio@1.1.1(expo-asset@57.0.16(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3))(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      expo: 57.0.19(@babel/core@7.29.7)(@expo/metro-runtime@57.0.15)(expo-router@57.0.18)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.1(@babel/core@7.29.7)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      expo-asset: 57.0.16(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3)
 
   expo-blur@57.0.2(expo@57.0.19)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.17)(react@19.2.3))(react@19.2.3):
     dependencies:

@@ -14,7 +14,25 @@
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "plugins": ["expo-router", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/audio/adhan-1.wav",
+            "./assets/audio/adhan-2.wav",
+            "./assets/audio/adhan-3.wav",
+            "./assets/audio/makkah-alarm.wav",
+            "./assets/audio/madinah-alarm.wav",
+            "./assets/audio/gentle-bell.wav",
+            "./assets/audio/soft-reminder.wav",
+            "./assets/audio/beep.wav",
+            "./assets/audio/nature-sound.wav"
+          ]
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

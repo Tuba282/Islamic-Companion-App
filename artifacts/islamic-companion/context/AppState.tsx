@@ -5,6 +5,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { Platform } from 'react-native';
 import { AccentName, ColorTokens, createPalette, ThemeName } from '@/constants/colors';
 import { calculatePrayerTimes, formatPrayerTime, PrayerTimes, prayerTimeForNotification } from '@/lib/prayer';
+import { AlarmTone, getAlarmSound, getNotificationChannelId, isAlarmTone } from '@/lib/alarmSounds';
 
 export type PrayerKey = 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
 type LocationStatus = 'idle' | 'loading' | 'ready' | 'denied' | 'error';
@@ -26,8 +27,8 @@ type AppStateValue = {
   setTasbeehCount: (value: number) => Promise<void>;
   alarms: Record<PrayerKey, boolean>;
   toggleAlarm: (key: PrayerKey) => Promise<void>;
-  alarmTone: string;
-  setAlarmTone: (tone: string) => Promise<void>;
+  alarmTone: AlarmTone;
+  setAlarmTone: (tone: AlarmTone) => Promise<void>;
   vibrationEnabled: boolean;
   setVibrationEnabled: (value: boolean) => Promise<void>;
   snoozeMinutes: number;
@@ -44,8 +45,6 @@ const defaultPrayers: DailyPrayerRecord = { Fajr: false, Dhuhr: false, Asr: fals
 const defaultAlarms: Record<PrayerKey, boolean> = { Fajr: true, Dhuhr: false, Asr: true, Maghrib: true, Isha: false };
 const STORAGE_KEY = '@islamic-companion-state';
 const todayKey = () => new Date().toISOString().slice(0, 10);
-const NOTIFICATION_CHANNEL_ID = 'prayer-alarms';
-
 const AppStateContext = createContext<AppStateValue | null>(null);
 
 async function ensureNotificationPermission() {
@@ -56,14 +55,18 @@ async function ensureNotificationPermission() {
   return next.granted;
 }
 
-async function configureNotificationChannel(vibrate: boolean) {
+async function configureNotificationChannel(tone: AlarmTone, vibrate: boolean) {
   if (Platform.OS !== 'android') return;
+  const sound = getAlarmSound(tone);
   try {
-    await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
-      name: 'Prayer alarms',
+    await Notifications.setNotificationChannelAsync(getNotificationChannelId(tone), {
+      name: `${tone} prayer alarms`,
+      description: `Prayer notifications using the ${tone} sound.`,
       importance: Notifications.AndroidImportance.MAX,
-      sound: 'default',
+      sound: sound.fileName,
       vibrationPattern: vibrate ? [0, 250, 150, 250] : [0],
+      enableVibrate: vibrate,
+      showBadge: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   } catch {
@@ -80,7 +83,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [prayerHistory, setPrayerHistory] = useState<Record<string, DailyPrayerRecord>>({});
   const [tasbeehCount, setTasbeehCountState] = useState(0);
   const [alarms, setAlarms] = useState(defaultAlarms);
-  const [alarmTone, setAlarmToneState] = useState('Adhan 1');
+  const [alarmTone, setAlarmToneState] = useState<AlarmTone>('Adhan 1');
   const [vibrationEnabled, setVibrationState] = useState(true);
   const [snoozeMinutes, setSnoozeState] = useState(5);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
@@ -100,7 +103,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         setCompletedPrayers(history[todayKey()] ?? defaultPrayers);
         if (typeof data.tasbeehCount === 'number') setTasbeehCountState(data.tasbeehCount);
         if (data.alarms) setAlarms(data.alarms);
-        if (data.alarmTone) setAlarmToneState(data.alarmTone);
+        if (isAlarmTone(data.alarmTone)) setAlarmToneState(data.alarmTone);
         if (typeof data.vibrationEnabled === 'boolean') setVibrationState(data.vibrationEnabled);
         if (typeof data.snoozeMinutes === 'number') setSnoozeState(data.snoozeMinutes);
       }
@@ -138,23 +141,25 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const schedulePrayerAlarm = async (key: PrayerKey, enabled: boolean, times: PrayerTimes | null) => {
+  const schedulePrayerAlarm = async (key: PrayerKey, enabled: boolean, times: PrayerTimes | null, tone = alarmTone) => {
     if (Platform.OS === 'web' || !times) return;
     const allowed = await ensureNotificationPermission();
     if (!allowed) return;
-    await configureNotificationChannel(vibrationEnabled);
+    await configureNotificationChannel(tone, vibrationEnabled);
     await Notifications.cancelScheduledNotificationAsync(`prayer-${key}`).catch(() => undefined);
     if (!enabled) return;
     const time = times[key];
+    const sound = getAlarmSound(tone);
+    const channelId = getNotificationChannelId(tone);
     await Notifications.scheduleNotificationAsync({
       identifier: `prayer-${key}`,
       content: {
         title: `${key} prayer`,
         body: `It is time for ${key}. May your prayer be accepted.`,
-        sound: 'default',
+        sound: sound.fileName,
         vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined,
       },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, channelId: NOTIFICATION_CHANNEL_ID, ...prayerTimeForNotification(time) },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, channelId, ...prayerTimeForNotification(time) },
     });
   };
 
@@ -164,10 +169,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const allowed = await ensureNotificationPermission();
       if (!allowed) return;
       for (const key of Object.keys(alarms) as PrayerKey[]) {
-        if (alarms[key]) await schedulePrayerAlarm(key, true, prayerTimes);
+        if (alarms[key]) await schedulePrayerAlarm(key, true, prayerTimes, alarmTone);
       }
     })();
-  }, [ready, prayerTimes, alarms, vibrationEnabled]);
+  }, [ready, prayerTimes, alarms, alarmTone, vibrationEnabled]);
 
   const value = useMemo<AppStateValue>(() => ({
     ready,
@@ -207,10 +212,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       if (Platform.OS === 'web') return false;
       const allowed = await ensureNotificationPermission();
       if (!allowed) return false;
-      await configureNotificationChannel(vibrationEnabled);
+      await configureNotificationChannel(alarmTone, vibrationEnabled);
+      const sound = getAlarmSound(alarmTone);
+      const channelId = getNotificationChannelId(alarmTone);
       await Notifications.scheduleNotificationAsync({
-        content: { title: 'Islamic Companion test alarm', body: `Your ${alarmTone} reminder is working.`, sound: 'default', vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined },
-        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, channelId: NOTIFICATION_CHANNEL_ID, seconds: 5, repeats: false },
+        content: { title: 'Islamic Companion test alarm', body: `Your ${alarmTone} reminder is working.`, sound: sound.fileName, vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, channelId, seconds: 5, repeats: false },
       });
       return true;
     },
