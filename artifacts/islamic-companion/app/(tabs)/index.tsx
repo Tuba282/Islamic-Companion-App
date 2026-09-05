@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { formatClockTime, formatPrayerTime, nextPrayer } from '@/lib/prayer';
+import { formatClockTime, formatDate, formatPrayerTime, nextPrayer } from '@/lib/prayer';
 import { useAppState } from '@/context/AppState';
 import { Screen, GlassCard, SectionTitle, IconButton } from '@/components/Primitives';
 import { useColors } from '@/hooks/useColors';
@@ -23,7 +23,7 @@ function countdown(target: Date | undefined, now: Date) {
 export default function HomeScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { locationStatus, locationLabel, prayerTimes, refreshLocation } = useAppState();
+  const { locationStatus, locationLabel, locationTimezoneOffsetMinutes, locationTimezoneLabel, prayerTimes, refreshLocation } = useAppState();
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -33,8 +33,8 @@ export default function HomeScreen() {
   }, [locationStatus, refreshLocation]);
 
   const upcoming = prayerTimes ? nextPrayer(prayerTimes, now) : null;
-  const currentTime = formatClockTime(now);
-  const date = now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const currentTime = formatClockTime(now, locationTimezoneOffsetMinutes);
+  const date = formatDate(now, locationTimezoneOffsetMinutes);
   const locationMessage = locationStatus === 'loading' ? 'Detecting your current location…' : locationStatus === 'denied' ? 'Location permission needed' : locationLabel;
 
   return (
@@ -54,12 +54,12 @@ export default function HomeScreen() {
       <View style={styles.clockRow}>
         <Text style={[styles.clock, { color: colors.foreground }]}>{currentTime}</Text>
         <Text style={[styles.date, { color: colors.mutedForeground }]}>{date}</Text>
-        <Text style={[styles.hijri, { color: colors.gold }]}>Local prayer times · Device timezone</Text>
+        <Text style={[styles.hijri, { color: colors.gold }]}>Local prayer times · {locationTimezoneLabel}</Text>
       </View>
       <LinearGradient colors={[colors.gold, '#B8914B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.nextCard}>
         <View style={styles.nextTop}><Text style={styles.nextLabel}>NEXT PRAYER</Text><View style={styles.sun}><Feather name="sun" size={16} color={colors.primaryForeground} /></View></View>
         <Text style={[styles.nextName, { color: colors.primaryForeground }]}>{upcoming?.[0] ?? (locationStatus === 'loading' ? 'Locating…' : 'Unavailable')}</Text>
-        <View style={styles.nextTimeRow}><Text style={[styles.nextTime, { color: colors.primaryForeground }]}>{upcoming ? formatPrayerTime(upcoming[1]) : '--:--'}</Text><Text style={[styles.until, { color: colors.primaryForeground }]}>{upcoming ? `in ${countdown(upcoming[1], now)}` : 'Allow location to calculate'}</Text></View>
+        <View style={styles.nextTimeRow}><Text style={[styles.nextTime, { color: colors.primaryForeground }]}>{upcoming ? formatPrayerTime(upcoming[1], locationTimezoneOffsetMinutes) : '--:--'}</Text><Text style={[styles.until, { color: colors.primaryForeground }]}>{upcoming ? `in ${countdown(upcoming[1], now)}` : 'Allow location to calculate'}</Text></View>
       </LinearGradient>
       <SectionTitle title="Today's prayers" action="Refresh" onAction={() => refreshLocation()} />
       <GlassCard style={styles.schedule}>
@@ -69,7 +69,7 @@ export default function HomeScreen() {
           return <View key={name} style={[styles.prayerRow, isNext && { backgroundColor: colors.goldSoft, marginHorizontal: -8, paddingHorizontal: 8, borderRadius: 12 }]}>
             <View style={[styles.prayerIcon, { backgroundColor: isNext ? colors.gold : colors.muted }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : name === 'Sunrise' ? 'sunrise' : 'sun'} size={14} color={isNext ? colors.primaryForeground : colors.gold} /></View>
             <Text style={[styles.prayerName, { color: colors.foreground }]}>{name}</Text>
-            <Text style={[styles.prayerTime, { color: isNext ? colors.gold : colors.mutedForeground }]}>{formatPrayerTime(value)}</Text>
+            <Text style={[styles.prayerTime, { color: isNext ? colors.gold : colors.mutedForeground }]}>{formatPrayerTime(value, locationTimezoneOffsetMinutes)}</Text>
             {isNext ? <View style={[styles.nowDot, { backgroundColor: colors.gold }]} /> : null}
           </View>;
         })}

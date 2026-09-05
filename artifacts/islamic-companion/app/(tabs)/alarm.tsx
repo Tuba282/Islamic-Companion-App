@@ -14,7 +14,7 @@ const prayerKeys: PrayerKey[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 export default function AlarmScreen() {
   const colors = useColors();
   const router = useRouter();
-  const { alarms, toggleAlarm, alarmTone, vibrationEnabled, setVibrationEnabled, snoozeMinutes, setSnoozeMinutes, scheduleTestAlarm, prayerTimes, locationStatus } = useAppState();
+  const { alarms, toggleAlarm, alarmTone, vibrationEnabled, setVibrationEnabled, snoozeMinutes, setSnoozeMinutes, scheduleTestAlarm, prayerTimes, locationStatus, locationTimezoneOffsetMinutes } = useAppState();
   const [notice, setNotice] = useState('');
   const player = useAudioPlayer(ALARM_SOUNDS[alarmTone].source);
   const cycleSnooze = () => setSnoozeMinutes(snoozeMinutes === 5 ? 10 : snoozeMinutes === 10 ? 15 : 5);
@@ -27,7 +27,7 @@ export default function AlarmScreen() {
   return <Screen>
     <Header title="Prayer Alarm" subtitle="Your phone will remind you at each prayer" />
     <GlassCard style={styles.card}>
-      {prayerKeys.map((name) => <View key={name} style={styles.alarmRow}><View style={[styles.miniIcon, { backgroundColor: colors.goldSoft }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : 'sun'} size={15} color={colors.gold} /></View><View style={{ flex: 1 }}><Text style={[styles.name, { color: colors.foreground }]}>{name}</Text><Text style={[styles.time, { color: colors.mutedForeground }]}>{prayerTimes ? formatPrayerTime(prayerTimes[name]) : 'Waiting for location…'}</Text></View><Toggle value={alarms[name]} onChange={() => toggleAlarm(name)} /></View>)}
+      {prayerKeys.map((name) => <View key={name} style={styles.alarmRow}><View style={[styles.miniIcon, { backgroundColor: colors.goldSoft }]}><Feather name={name === 'Fajr' ? 'sunrise' : name === 'Isha' ? 'moon' : 'sun'} size={15} color={colors.gold} /></View><View style={{ flex: 1 }}><Text style={[styles.name, { color: colors.foreground }]}>{name}</Text><Text style={[styles.time, { color: colors.mutedForeground }]}>{prayerTimes ? formatPrayerTime(prayerTimes[name], locationTimezoneOffsetMinutes) : 'Waiting for location…'}</Text></View><Toggle value={alarms[name]} onChange={() => toggleAlarm(name)} /></View>)}
     </GlassCard>
     <SectionTitle title="Alarm preferences" />
     <GlassCard>

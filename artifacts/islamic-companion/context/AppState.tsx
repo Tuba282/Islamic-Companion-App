@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { AccentName, ColorTokens, createPalette, ThemeName } from '@/constants/colors';
-import { calculatePrayerTimes, formatPrayerTime, PrayerTimes, prayerTimeForNotification } from '@/lib/prayer';
+import { calculatePrayerTimes, formatPrayerTime, formatTimezoneOffset, getLocationTimezoneOffsetMinutes, PrayerTimes, prayerTimeForNotification } from '@/lib/prayer';
 import { AlarmTone, getAlarmSound, getNotificationChannelId, isAlarmTone } from '@/lib/alarmSounds';
 
 export type PrayerKey = 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
@@ -36,6 +36,8 @@ type AppStateValue = {
   scheduleTestAlarm: () => Promise<boolean>;
   locationStatus: LocationStatus;
   locationLabel: string;
+  locationTimezoneOffsetMinutes: number;
+  locationTimezoneLabel: string;
   coordinates: { latitude: number; longitude: number } | null;
   prayerTimes: PrayerTimes | null;
   refreshLocation: () => Promise<void>;
@@ -88,6 +90,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [snoozeMinutes, setSnoozeState] = useState(5);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle');
   const [locationLabel, setLocationLabel] = useState('Location not set');
+  const [locationTimezoneOffsetMinutes, setLocationTimezoneOffsetMinutes] = useState(-new Date().getTimezoneOffset());
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
 
@@ -128,10 +131,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       }
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const nextCoordinates = { latitude: current.coords.latitude, longitude: current.coords.longitude };
-      setCoordinates(nextCoordinates);
-      setPrayerTimes(calculatePrayerTimes(new Date(), nextCoordinates.latitude, nextCoordinates.longitude));
       const places = await Location.reverseGeocodeAsync(nextCoordinates).catch(() => []);
       const place = places[0];
+      const timezoneOffsetMinutes = getLocationTimezoneOffsetMinutes(nextCoordinates.latitude, nextCoordinates.longitude, place?.isoCountryCode);
+      setCoordinates(nextCoordinates);
+      setLocationTimezoneOffsetMinutes(timezoneOffsetMinutes);
+      setPrayerTimes(calculatePrayerTimes(new Date(), nextCoordinates.latitude, nextCoordinates.longitude, timezoneOffsetMinutes));
       setLocationLabel([place?.city, place?.region, place?.country].filter(Boolean).join(', ') || `${nextCoordinates.latitude.toFixed(2)}°, ${nextCoordinates.longitude.toFixed(2)}°`);
       setLocationStatus('ready');
     } catch {
@@ -223,10 +228,12 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     },
     locationStatus,
     locationLabel,
+    locationTimezoneOffsetMinutes,
+    locationTimezoneLabel: formatTimezoneOffset(locationTimezoneOffsetMinutes),
     coordinates,
     prayerTimes,
     refreshLocation,
-  }), [ready, onboardingComplete, theme, accent, completedPrayers, prayerHistory, tasbeehCount, alarms, alarmTone, vibrationEnabled, snoozeMinutes, locationStatus, locationLabel, coordinates, prayerTimes, refreshLocation]);
+  }), [ready, onboardingComplete, theme, accent, completedPrayers, prayerHistory, tasbeehCount, alarms, alarmTone, vibrationEnabled, snoozeMinutes, locationStatus, locationLabel, locationTimezoneOffsetMinutes, coordinates, prayerTimes, refreshLocation]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
