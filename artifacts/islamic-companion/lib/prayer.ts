@@ -7,91 +7,85 @@ export type PrayerTimes = {
   Isha: Date;
 };
 
-type SolarEvent = 'sunrise' | 'sunset' | 'civilTwilight';
-
 const degToRad = (value: number) => (value * Math.PI) / 180;
 const radToDeg = (value: number) => (value * 180) / Math.PI;
 const normalize = (value: number) => ((value % 360) + 360) % 360;
+const fixHour = (hour: number) => ((hour % 24) + 24) % 24;
 
-function solarPosition(date: Date) {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 0));
-  const day = Math.floor((date.getTime() - start.getTime()) / 86400000);
-  const hour = date.getUTCHours() + date.getUTCMinutes() / 60;
-  const gamma = (2 * Math.PI / 365) * (day - 1 + (hour - 12) / 24);
-  const equationOfTime = 229.18 * (
-    0.000075 +
-    0.001868 * Math.cos(gamma) -
-    0.032077 * Math.sin(gamma) -
-    0.014615 * Math.cos(2 * gamma) -
-    0.040849 * Math.sin(2 * gamma)
-  );
-  const declination =
-    0.006918 -
-    0.399912 * Math.cos(gamma) +
-    0.070257 * Math.sin(gamma) -
-    0.006758 * Math.cos(2 * gamma) +
-    0.000907 * Math.sin(2 * gamma) -
-    0.002697 * Math.cos(3 * gamma) +
-    0.00148 * Math.sin(3 * gamma);
-  return { equationOfTime, declination };
+function getJulianDate(year: number, month: number, day: number): number {
+  let y = year;
+  let m = month;
+  if (m <= 2) {
+    y -= 1;
+    m += 12;
+  }
+  const A = Math.floor(y / 100);
+  const B = 2 - A + Math.floor(A / 4);
+  return Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + B - 1524.5;
 }
 
-function localSolarDate(date: Date, timezoneOffsetMinutes: number) {
+function getSunPosition(julianDate: number): { declination: number; equationOfTime: number } {
+  const D = julianDate - 2451545.0;
+  const g = fixHour(357.529 + 0.98560028 * D);
+  const q = fixHour(280.459 + 0.98564736 * D);
+  const L = fixHour(q + 1.915 * Math.sin(degToRad(g)) + 0.020 * Math.sin(degToRad(2 * g)));
+  const e = 23.439 - 0.00000036 * D;
+  const declination = radToDeg(Math.asin(Math.sin(degToRad(e)) * Math.sin(degToRad(L))));
+  const rightAscension = radToDeg(Math.atan2(Math.cos(degToRad(e)) * Math.sin(degToRad(L)), Math.cos(degToRad(L)))) / 15;
+  const equationOfTime = (q / 15 - fixHour(rightAscension)) * 60; // in minutes
+  return { declination, equationOfTime };
+}
+
+export function calculatePrayerTimes(
+  date: Date,
+  latitude: number,
+  longitude: number,
+  timezoneOffsetMinutes = -date.getTimezoneOffset(),
+  asrMethod: 'standard' | 'hanafi' = 'standard'
+): PrayerTimes {
   const local = new Date(date.getTime() + timezoneOffsetMinutes * 60000);
-  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), 12));
-}
+  const year = local.getUTCFullYear();
+  const month = local.getUTCMonth() + 1;
+  const day = local.getUTCDate();
 
-function localTimeToDate(date: Date, minutes: number, timezoneOffsetMinutes: number) {
-  const local = new Date(date.getTime() + timezoneOffsetMinutes * 60000);
-  const midnightUtc = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
-  return new Date(midnightUtc - timezoneOffsetMinutes * 60000 + minutes * 60000);
-}
+  const jd = getJulianDate(year, month, day);
+  const { declination, equationOfTime } = getSunPosition(jd);
 
-function solarEvent(date: Date, latitude: number, longitude: number, event: SolarEvent, direction: 'rise' | 'set', timezoneOffsetMinutes: number) {
-  const { equationOfTime, declination } = solarPosition(date);
-  const zenith = event === 'sunrise' ? 90.833 : event === 'civilTwilight' ? 96 : 90.833;
-  const latitudeRad = degToRad(latitude);
-  const cosHourAngle = (
-    Math.cos(degToRad(zenith)) /
-      (Math.cos(latitudeRad) * Math.cos(declination)) -
-    Math.tan(latitudeRad) * Math.tan(declination)
-  );
-  const bounded = Math.min(1, Math.max(-1, cosHourAngle));
-  const hourAngle = direction === 'rise' ? -Math.acos(bounded) : Math.acos(bounded);
-  const minutes = 720 - 4 * (longitude + radToDeg(hourAngle)) - equationOfTime;
-  return localTimeToDate(date, minutes, timezoneOffsetMinutes);
-}
+  // Solar noon in local hours
+  const noonHours = 12 + timezoneOffsetMinutes / 60 - longitude / 15 - equationOfTime / 60;
 
-function solarNoon(date: Date, longitude: number, timezoneOffsetMinutes: number) {
-  const { equationOfTime } = solarPosition(date);
-  return localTimeToDate(date, 720 - 4 * longitude - equationOfTime, timezoneOffsetMinutes);
-}
+  function hourAngle(altitude: number): number | null {
+    const latRad = degToRad(latitude);
+    const declRad = degToRad(declination);
+    const altRad = degToRad(altitude);
+    const cosH = (Math.sin(altRad) - Math.sin(latRad) * Math.sin(declRad)) / (Math.cos(latRad) * Math.cos(declRad));
+    if (cosH > 1) return null;
+    if (cosH < -1) return null;
+    return radToDeg(Math.acos(cosH)) / 15;
+  }
 
-function angleForElevation(date: Date, latitude: number, longitude: number, elevation: number, direction: 'rise' | 'set', timezoneOffsetMinutes: number) {
-  const { declination, equationOfTime } = solarPosition(date);
-  const latitudeRad = degToRad(latitude);
-  const cosHourAngle = (
-    Math.cos(degToRad(90 + elevation)) /
-      (Math.cos(latitudeRad) * Math.cos(declination)) -
-    Math.tan(latitudeRad) * Math.tan(declination)
-  );
-  const bounded = Math.min(1, Math.max(-1, cosHourAngle));
-  const hourAngle = direction === 'rise' ? -Math.acos(bounded) : Math.acos(bounded);
-  const minutes = 720 - 4 * (longitude + radToDeg(hourAngle)) - equationOfTime;
-  return localTimeToDate(date, minutes, timezoneOffsetMinutes);
-}
+  const sunriseHA = hourAngle(-0.833) ?? 6;
+  const fajrHA = hourAngle(-18) ?? 7.5;
+  const ishaHA = hourAngle(-18) ?? 7.5;
 
-export function calculatePrayerTimes(date: Date, latitude: number, longitude: number, timezoneOffsetMinutes = -date.getTimezoneOffset()): PrayerTimes {
-  const solarDate = localSolarDate(date, timezoneOffsetMinutes);
-  const sunrise = solarEvent(solarDate, latitude, longitude, 'sunrise', 'rise', timezoneOffsetMinutes);
-  const sunset = solarEvent(solarDate, latitude, longitude, 'sunset', 'set', timezoneOffsetMinutes);
+  // Asr altitude calculation
+  const noonZenith = Math.abs(latitude - declination);
+  const shadowFactor = asrMethod === 'hanafi' ? 2 : 1;
+  const asrAlt = radToDeg(Math.atan(1 / (shadowFactor + Math.tan(degToRad(noonZenith)))));
+  const asrHA = hourAngle(asrAlt) ?? 3.5;
+
+  const toDate = (hours: number): Date => {
+    const midnightUtc = Date.UTC(year, month - 1, day);
+    return new Date(midnightUtc - timezoneOffsetMinutes * 60000 + hours * 3600 * 1000);
+  };
+
   return {
-    Fajr: angleForElevation(solarDate, latitude, longitude, -18, 'rise', timezoneOffsetMinutes),
-    Sunrise: sunrise,
-    Dhuhr: solarNoon(solarDate, longitude, timezoneOffsetMinutes),
-    Asr: angleForElevation(solarDate, latitude, longitude, -4.5, 'set', timezoneOffsetMinutes),
-    Maghrib: sunset,
-    Isha: angleForElevation(solarDate, latitude, longitude, -18, 'set', timezoneOffsetMinutes),
+    Fajr: toDate(noonHours - fajrHA),
+    Sunrise: toDate(noonHours - sunriseHA),
+    Dhuhr: toDate(noonHours),
+    Asr: toDate(noonHours + asrHA),
+    Maghrib: toDate(noonHours + sunriseHA),
+    Isha: toDate(noonHours + ishaHA),
   };
 }
 
@@ -121,17 +115,20 @@ const countryTimezoneOffsets: Record<string, number> = {
   CN: 480,
   JP: 540,
   KR: 540,
+  GB: 0,
+  US: -300, // Eastern standard default
 };
 
-export function getLocationTimezoneOffsetMinutes(latitude: number, longitude: number, countryCode?: string) {
+export function getLocationTimezoneOffsetMinutes(latitude: number, longitude: number, countryCode?: string): number {
   const normalizedCountryCode = countryCode?.toUpperCase();
   if (normalizedCountryCode && countryTimezoneOffsets[normalizedCountryCode] !== undefined) {
     return countryTimezoneOffsets[normalizedCountryCode];
   }
+  // Rough geographic approximation if country is unknown
   return Math.max(-12, Math.min(14, Math.round(longitude / 15))) * 60;
 }
 
-export function formatTimezoneOffset(offsetMinutes: number) {
+export function formatTimezoneOffset(offsetMinutes: number): string {
   const sign = offsetMinutes >= 0 ? '+' : '-';
   const absolute = Math.abs(offsetMinutes);
   const hours = Math.floor(absolute / 60).toString().padStart(2, '0');
@@ -139,34 +136,51 @@ export function formatTimezoneOffset(offsetMinutes: number) {
   return `GMT${sign}${hours}:${minutes}`;
 }
 
-export function qiblaBearing(latitude: number, longitude: number) {
+export function qiblaBearing(latitude: number, longitude: number): number {
   const kaabaLatitude = degToRad(21.422487);
   const kaabaLongitude = degToRad(39.826206);
   const currentLatitude = degToRad(latitude);
   const deltaLongitude = kaabaLongitude - degToRad(longitude);
-  const bearing = radToDeg(Math.atan2(
-    Math.sin(deltaLongitude),
-    Math.cos(currentLatitude) * Math.tan(kaabaLatitude) -
-      Math.sin(currentLatitude) * Math.cos(deltaLongitude),
-  ));
+  const bearing = radToDeg(
+    Math.atan2(
+      Math.sin(deltaLongitude),
+      Math.cos(currentLatitude) * Math.tan(kaabaLatitude) -
+        Math.sin(currentLatitude) * Math.cos(deltaLongitude)
+    )
+  );
   return Math.round(normalize(bearing));
 }
 
-export function formatPrayerTime(value: Date | undefined, timezoneOffsetMinutes?: number) {
+export function distanceToKaabaKm(latitude: number, longitude: number): number {
+  const R = 6371; // Earth's radius in km
+  const kaabaLat = degToRad(21.422487);
+  const kaabaLng = degToRad(39.826206);
+  const lat1 = degToRad(latitude);
+  const lng1 = degToRad(longitude);
+  const dLat = kaabaLat - lat1;
+  const dLng = kaabaLng - lng1;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(kaabaLat) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+export function formatPrayerTime(value: Date | undefined, timezoneOffsetMinutes?: number): string {
   if (!value) return '--:--';
   return formatClockTime(value, timezoneOffsetMinutes);
 }
 
-export function formatClockTime(value: Date, timezoneOffsetMinutes = -value.getTimezoneOffset()) {
+export function formatClockTime(value: Date, timezoneOffsetMinutes = -value.getTimezoneOffset()): string {
   const shifted = new Date(value.getTime() + timezoneOffsetMinutes * 60000);
   const hour24 = shifted.getUTCHours();
-  const hour = (hour24 % 12 || 12).toString();
+  const hour12 = hour24 % 12 || 12;
   const minute = shifted.getUTCMinutes().toString().padStart(2, '0');
   const period = hour24 >= 12 ? 'PM' : 'AM';
-  return `${hour}:${minute} ${period}`;
+  return `${hour12}:${minute} ${period}`;
 }
 
-export function formatDate(value: Date, timezoneOffsetMinutes = -value.getTimezoneOffset()) {
+export function formatDate(value: Date, timezoneOffsetMinutes = -value.getTimezoneOffset()): string {
   const shifted = new Date(value.getTime() + timezoneOffsetMinutes * 60000);
   return new Intl.DateTimeFormat('en-US', {
     weekday: 'long',
@@ -177,11 +191,11 @@ export function formatDate(value: Date, timezoneOffsetMinutes = -value.getTimezo
   }).format(shifted);
 }
 
-export function prayerTimeForNotification(value: Date) {
+export function prayerTimeForNotification(value: Date): { hour: number; minute: number } {
   return { hour: value.getHours(), minute: value.getMinutes() };
 }
 
-export function nextPrayer(times: PrayerTimes, now = new Date()) {
+export function nextPrayer(times: PrayerTimes, now = new Date()): [keyof PrayerTimes, Date] {
   const ordered: Array<[keyof PrayerTimes, Date]> = [
     ['Fajr', times.Fajr],
     ['Dhuhr', times.Dhuhr],

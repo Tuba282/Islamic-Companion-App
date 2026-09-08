@@ -11,6 +11,14 @@ export type PrayerKey = 'Fajr' | 'Dhuhr' | 'Asr' | 'Maghrib' | 'Isha';
 type LocationStatus = 'idle' | 'loading' | 'ready' | 'denied' | 'error';
 type DailyPrayerRecord = Record<PrayerKey, boolean>;
 
+export type SavedLocationData = {
+  coordinates: { latitude: number; longitude: number };
+  label: string;
+  timezoneOffsetMinutes: number;
+  countryCode?: string;
+  isManual?: boolean;
+};
+
 type AppStateValue = {
   ready: boolean;
   onboardingComplete: boolean;
@@ -41,6 +49,7 @@ type AppStateValue = {
   coordinates: { latitude: number; longitude: number } | null;
   prayerTimes: PrayerTimes | null;
   refreshLocation: () => Promise<void>;
+  setLocationManually: (coords: { latitude: number; longitude: number }, label: string, countryCode?: string, customTz?: number) => Promise<void>;
 };
 
 const defaultPrayers: DailyPrayerRecord = { Fajr: false, Dhuhr: false, Asr: false, Maghrib: false, Isha: false };
@@ -51,10 +60,15 @@ const AppStateContext = createContext<AppStateValue | null>(null);
 
 async function ensureNotificationPermission() {
   if (Platform.OS === 'web') return false;
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted) return true;
-  const next = await Notifications.requestPermissionsAsync();
-  return next.granted;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return true;
+    const next = await Notifications.requestPermissionsAsync();
+    return next.granted;
+  } catch {
+    // Expo Go SDK 53+ Android push notification restriction
+    return false;
+  }
 }
 
 async function configureNotificationChannel(tone: AlarmTone, vibrate: boolean) {
@@ -72,7 +86,7 @@ async function configureNotificationChannel(tone: AlarmTone, vibrate: boolean) {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   } catch {
-    // Expo Go can lack the Android channel provider; the production build still configures it.
+    // Expo Go can lack the Android channel provider
   }
 }
 
@@ -94,10 +108,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
 
+  const persist = async (patch: Record<string, unknown>) => {
+    const stored = await AsyncStorage.getItem(STORAGE_KEY);
+    const current = stored ? JSON.parse(stored) : {};
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, ...patch }));
+  };
+
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
       if (stored) {
-        const data = JSON.parse(stored) as Partial<AppStateValue> & { prayerHistory?: Record<string, DailyPrayerRecord> };
+        const data = JSON.parse(stored) as Partial<AppStateValue> & {
+          prayerHistory?: Record<string, DailyPrayerRecord>;
+          savedLocation?: SavedLocationData;
+        };
         setOnboardingComplete(Boolean(data.onboardingComplete));
         if (data.theme) setThemeState(data.theme);
         if (data.accent) setAccentState(data.accent);
@@ -109,15 +132,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
         if (isAlarmTone(data.alarmTone)) setAlarmToneState(data.alarmTone);
         if (typeof data.vibrationEnabled === 'boolean') setVibrationState(data.vibrationEnabled);
         if (typeof data.snoozeMinutes === 'number') setSnoozeState(data.snoozeMinutes);
+
+        // Restore saved location if available
+        if (data.savedLocation?.coordinates) {
+          const { coordinates: coords, label, timezoneOffsetMinutes: tz } = data.savedLocation;
+          setCoordinates(coords);
+          setLocationLabel(label);
+          setLocationTimezoneOffsetMinutes(tz);
+          setPrayerTimes(calculatePrayerTimes(new Date(), coords.latitude, coords.longitude, tz));
+          setLocationStatus('ready');
+        }
       }
     }).catch(() => undefined).finally(() => setReady(true));
   }, []);
-
-  const persist = async (patch: Record<string, unknown>) => {
-    const stored = await AsyncStorage.getItem(STORAGE_KEY);
-    const current = stored ? JSON.parse(stored) : {};
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...current, ...patch }));
-  };
 
   const refreshLocation = useCallback(async () => {
     setLocationStatus('loading');
@@ -125,56 +152,99 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (permission.status !== 'granted') {
         setLocationStatus('denied');
-        setLocationLabel('Location permission denied');
-        setPrayerTimes(null);
+        setLocationLabel((prev) => (prev !== 'Location not set' ? prev : 'Location permission denied'));
         return;
       }
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const nextCoordinates = { latitude: current.coords.latitude, longitude: current.coords.longitude };
       const places = await Location.reverseGeocodeAsync(nextCoordinates).catch(() => []);
       const place = places[0];
-      const timezoneOffsetMinutes = getLocationTimezoneOffsetMinutes(nextCoordinates.latitude, nextCoordinates.longitude, place?.isoCountryCode);
+      const timezoneOffsetMinutes = getLocationTimezoneOffsetMinutes(nextCoordinates.latitude, nextCoordinates.longitude, place?.isoCountryCode ?? undefined);
+      const resolvedLabel = [place?.city, place?.region, place?.country].filter(Boolean).join(', ') || `${nextCoordinates.latitude.toFixed(2)}°, ${nextCoordinates.longitude.toFixed(2)}°`;
+
       setCoordinates(nextCoordinates);
       setLocationTimezoneOffsetMinutes(timezoneOffsetMinutes);
       setPrayerTimes(calculatePrayerTimes(new Date(), nextCoordinates.latitude, nextCoordinates.longitude, timezoneOffsetMinutes));
-      setLocationLabel([place?.city, place?.region, place?.country].filter(Boolean).join(', ') || `${nextCoordinates.latitude.toFixed(2)}°, ${nextCoordinates.longitude.toFixed(2)}°`);
+      setLocationLabel(resolvedLabel);
       setLocationStatus('ready');
+
+      await persist({
+        savedLocation: {
+          coordinates: nextCoordinates,
+          label: resolvedLabel,
+          timezoneOffsetMinutes,
+          countryCode: place?.isoCountryCode ?? undefined,
+          isManual: false,
+        },
+      });
     } catch {
       setLocationStatus('error');
-      setLocationLabel('Unable to detect location');
-      setPrayerTimes(null);
+      setLocationLabel((prev) => (prev !== 'Location not set' ? prev : 'Unable to detect location'));
     }
+  }, []);
+
+  const setLocationManually = useCallback(async (
+    nextCoords: { latitude: number; longitude: number },
+    label: string,
+    countryCode?: string,
+    customTz?: number
+  ) => {
+    const tz = customTz !== undefined ? customTz : getLocationTimezoneOffsetMinutes(nextCoords.latitude, nextCoords.longitude, countryCode);
+    setCoordinates(nextCoords);
+    setLocationLabel(label);
+    setLocationTimezoneOffsetMinutes(tz);
+    const times = calculatePrayerTimes(new Date(), nextCoords.latitude, nextCoords.longitude, tz);
+    setPrayerTimes(times);
+    setLocationStatus('ready');
+
+    await persist({
+      savedLocation: {
+        coordinates: nextCoords,
+        label,
+        timezoneOffsetMinutes: tz,
+        countryCode,
+        isManual: true,
+      },
+    });
   }, []);
 
   const schedulePrayerAlarm = async (key: PrayerKey, enabled: boolean, times: PrayerTimes | null, tone = alarmTone) => {
     if (Platform.OS === 'web' || !times) return;
-    const allowed = await ensureNotificationPermission();
-    if (!allowed) return;
-    await configureNotificationChannel(tone, vibrationEnabled);
-    await Notifications.cancelScheduledNotificationAsync(`prayer-${key}`).catch(() => undefined);
-    if (!enabled) return;
-    const time = times[key];
-    const sound = getAlarmSound(tone);
-    const channelId = getNotificationChannelId(tone);
-    await Notifications.scheduleNotificationAsync({
-      identifier: `prayer-${key}`,
-      content: {
-        title: `${key} prayer`,
-        body: `It is time for ${key}. May your prayer be accepted.`,
-        sound: sound.fileName,
-        vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined,
-      },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, channelId, ...prayerTimeForNotification(time) },
-    });
+    try {
+      const allowed = await ensureNotificationPermission();
+      if (!allowed) return;
+      await configureNotificationChannel(tone, vibrationEnabled);
+      await Notifications.cancelScheduledNotificationAsync(`prayer-${key}`).catch(() => undefined);
+      if (!enabled) return;
+      const time = times[key];
+      const sound = getAlarmSound(tone);
+      const channelId = getNotificationChannelId(tone);
+      await Notifications.scheduleNotificationAsync({
+        identifier: `prayer-${key}`,
+        content: {
+          title: `${key} prayer`,
+          body: `It is time for ${key}. May your prayer be accepted.`,
+          sound: sound.fileName,
+          vibrate: vibrationEnabled ? [0, 250, 150, 250] : undefined,
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DAILY, channelId, ...prayerTimeForNotification(time) },
+      });
+    } catch {
+      // Swallowed for Expo Go SDK 53+ compatibility
+    }
   };
 
   useEffect(() => {
     if (!ready || !prayerTimes || Platform.OS === 'web') return;
     void (async () => {
-      const allowed = await ensureNotificationPermission();
-      if (!allowed) return;
-      for (const key of Object.keys(alarms) as PrayerKey[]) {
-        if (alarms[key]) await schedulePrayerAlarm(key, true, prayerTimes, alarmTone);
+      try {
+        const allowed = await ensureNotificationPermission();
+        if (!allowed) return;
+        for (const key of Object.keys(alarms) as PrayerKey[]) {
+          if (alarms[key]) await schedulePrayerAlarm(key, true, prayerTimes, alarmTone);
+        }
+      } catch {
+        // Swallowed for Expo Go SDK 53+ compatibility
       }
     })();
   }, [ready, prayerTimes, alarms, alarmTone, vibrationEnabled]);
@@ -185,8 +255,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     completeOnboarding: async () => { setOnboardingComplete(true); await persist({ onboardingComplete: true }); },
     theme,
     accent,
-    setTheme: async (value) => { setThemeState(value); await persist({ theme: value }); },
-    setAccent: async (value) => { setAccentState(value); await persist({ accent: value }); },
+    setTheme: async (v) => { setThemeState(v); await persist({ theme: v }); },
+    setAccent: async (v) => { setAccentState(v); await persist({ accent: v }); },
     colors: createPalette(theme, accent),
     completedPrayers,
     prayerHistory,
@@ -198,7 +268,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       await persist({ prayerHistory: nextHistory });
     },
     tasbeehCount,
-    setTasbeehCount: async (value) => { const next = Math.max(0, value); setTasbeehCountState(next); await persist({ tasbeehCount: next }); },
+    setTasbeehCount: async (v) => { const next = Math.max(0, v); setTasbeehCountState(next); await persist({ tasbeehCount: next }); },
     alarms,
     toggleAlarm: async (key) => {
       const nextValue = !alarms[key];
@@ -210,9 +280,9 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     alarmTone,
     setAlarmTone: async (tone) => { setAlarmToneState(tone); await persist({ alarmTone: tone }); },
     vibrationEnabled,
-    setVibrationEnabled: async (value) => { setVibrationState(value); await persist({ vibrationEnabled: value }); },
+    setVibrationEnabled: async (v) => { setVibrationState(v); await persist({ vibrationEnabled: v }); },
     snoozeMinutes,
-    setSnoozeMinutes: async (value) => { setSnoozeState(value); await persist({ snoozeMinutes: value }); },
+    setSnoozeMinutes: async (v) => { setSnoozeState(v); await persist({ snoozeMinutes: v }); },
     scheduleTestAlarm: async () => {
       if (Platform.OS === 'web') return false;
       const allowed = await ensureNotificationPermission();
@@ -233,7 +303,8 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
     coordinates,
     prayerTimes,
     refreshLocation,
-  }), [ready, onboardingComplete, theme, accent, completedPrayers, prayerHistory, tasbeehCount, alarms, alarmTone, vibrationEnabled, snoozeMinutes, locationStatus, locationLabel, locationTimezoneOffsetMinutes, coordinates, prayerTimes, refreshLocation]);
+    setLocationManually,
+  }), [ready, onboardingComplete, theme, accent, completedPrayers, prayerHistory, tasbeehCount, alarms, alarmTone, vibrationEnabled, snoozeMinutes, locationStatus, locationLabel, locationTimezoneOffsetMinutes, coordinates, prayerTimes, refreshLocation, setLocationManually]);
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
